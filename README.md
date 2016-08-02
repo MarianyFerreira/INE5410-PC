@@ -1,3 +1,7 @@
-# INE5410 - Concurrent Programming
+Federal University of Santa Catarina.
 
- This repository contains exercises, tests and working practices of the discipline of Concurrent Programming
+Computer Science Course.
+
+INE5410 - Concurrent Programming
+
+This repository contains exercises, tests and working practices of the discipline of Concurrent Programming
