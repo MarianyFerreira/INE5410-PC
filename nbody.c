@@ -6,8 +6,8 @@
 /*
  * pRNG based on http://www.cs.wm.edu/~va/software/park/park.html
  */
-#define MODULUS    2147483647
-#define MULTIPLIER 48271
+#define MODULO    2147483647
+#define MULTIPLICADOR 48271
 #define DEFAULT    123456789
 
 static long seed = DEFAULT;
@@ -15,21 +15,21 @@ double dt, dt_old; /* Alterado de static para global */
 
 double Random(void)
 /* ----------------------------------------------------------------
- * Random returns a pseudo-random real number uniformly distributed 
- * between 0.0 and 1.0. 
+ * Random returns a pseudo-random real number uniformly distributed
+ * between 0.0 and 1.0.
  * ----------------------------------------------------------------
  */
 {
-  const long Q = MODULUS / MULTIPLIER;
-  const long R = MODULUS % MULTIPLIER;
+  const long Q = MODULO / MULTIPLICADOR;
+  const long R = MODULO % MULTIPLICADOR;
         long t;
 
-  t = MULTIPLIER * (seed % Q) - R * (seed / Q);
-  if (t > 0) 
+  t = MULTIPLICADOR * (seed % Q) - R * (seed / Q);
+  if (t > 0)
     seed = t;
-  else 
-    seed = t + MODULUS;
-  return ((double) seed / MODULUS);
+  else
+    seed = t + MODULO;
+  return ((double) seed / MODULO);
 }
 
 /*
@@ -49,6 +49,24 @@ typedef struct {
 void InitParticles( Particle[], ParticleV [], int );
 double ComputeForces( Particle [], Particle [], ParticleV [], int );
 double ComputeNewPos( Particle [], ParticleV [], int, double);
+void InitiParticle(Particle[], int);
+void InitiParticleV(ParticleV[], int);
+
+void InitiParticle(Particle particles[], int i){
+    particles[i].x	  = Random();
+	particles[i].y	  = Random();
+	particles[i].z	  = Random();
+	particles[i].mass = 1.0;
+}
+
+void InitiParticleV(ParticleV pv[], int i){
+    pv[i].xold	  = particles[i].x;
+	pv[i].yold	  = particles[i].y;
+	pv[i].zold	  = particles[i].z;
+	pv[i].fx	  = 0;
+	pv[i].fy	  = 0;
+	pv[i].fz	  = 0;
+}
 
 int main(int argc, char **argv)
 {
@@ -62,29 +80,33 @@ int main(int argc, char **argv)
 		printf("Wrong number of parameters.\nUsage: nbody num_bodies timesteps\n");
 		exit(1);
 	}
-    
+
 	npart = atoi(argv[1]);
 	cnt = atoi(argv[2]);
-	dt = 0.001; 
+	dt = 0.001;
 	dt_old = 0.001;
 
     /* Allocate memory for particles */
     particles = (Particle *) malloc(sizeof(Particle)*npart);
     pv = (ParticleV *) malloc(sizeof(ParticleV)*npart);
-    
+
     /* Generate the initial values */
     InitParticles( particles, pv, npart);
     sim_t = 0.0;
 
     while (cnt--) {
+	  fprintf(stdout, "Contador: %d\n", cnt);
       double max_f;
       /* Compute forces (2D only) */
       max_f = ComputeForces( particles, particles, pv, npart );
+  	  fprintf(stdout, "max_f: %g\n", max_f);
       /* Once we have the forces, we compute the changes in position */
       sim_t += ComputeNewPos( particles, pv, npart, max_f);
+	  fprintf(stdout, "sim_t: %g\n", sim_t);
+	  fprintf(stdout, "------------------------------------\n");
     }
     for (i=0; i<npart; i++)
-      fprintf(stdout,"%.5lf %.5lf\n", particles[i].x, particles[i].y);
+      fprintf(stdout,"X: %.5lf Y: %.5lf\n", particles[i].x, particles[i].y);
     return 0;
 }
 
@@ -92,16 +114,8 @@ void InitParticles( Particle particles[], ParticleV pv[], int npart )
 {
     int i;
     for (i=0; i<npart; i++) {
-	particles[i].x	  = Random();
-	particles[i].y	  = Random();
-	particles[i].z	  = Random();
-	particles[i].mass = 1.0;
-	pv[i].xold	  = particles[i].x;
-	pv[i].yold	  = particles[i].y;
-	pv[i].zold	  = particles[i].z;
-	pv[i].fx	  = 0;
-	pv[i].fy	  = 0;
-	pv[i].fz	  = 0;
+    	InitiParticle(particles, i);
+        InitiParticleV(pv, i);
     }
 }
 
@@ -134,7 +148,7 @@ double ComputeForces( Particle myparticles[], Particle others[], ParticleV pv[],
     pv[i].fy += fy;
     fx = sqrt(fx*fx + fy*fy)/rmin;
     if (fx > max_f) max_f = fx;
-  }
+}
   return max_f;
 }
 
