@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
+#include <pthread.h>
 
 /*
  * pRNG based on http://www.cs.wm.edu/~va/software/park/park.html
@@ -12,7 +13,8 @@
 
 static long seed = DEFAULT;
 double dt, dt_old; /* Alterado de static para global */
-
+pthread_mutex_t mutex1;
+pthread_mutex_t mutex2;
 double Random(void)
 /* ----------------------------------------------------------------
  * Random returns a pseudo-random real number uniformly distributed
@@ -46,32 +48,41 @@ typedef struct {
     double fx, fy, fz;
 } ParticleV;
 
+Particle  * particles;   /* Particles */
+ParticleV * pv;          /* Particle velocity */
+
 void InitParticles( Particle[], ParticleV [], int );
 double ComputeForces( Particle [], Particle [], ParticleV [], int );
 double ComputeNewPos( Particle [], ParticleV [], int, double);
-void InitiParticle(Particle[], int);
-void InitiParticleV(ParticleV[], int);
+void *InitiParticle(void *);
+void *InitiParticleV(void *);
 
-void InitiParticle(Particle particles[], int i){
+void *InitiParticle(void *arg){
+    //pthread_mutex_lock(&mutex1);
+    int i = *((int *) arg);
     particles[i].x	  = Random();
 	particles[i].y	  = Random();
 	particles[i].z	  = Random();
 	particles[i].mass = 1.0;
+    //pthread_mutex_unlock(&mutex2);
+    pthread_exit(NULL);
 }
 
-void InitiParticleV(ParticleV pv[], int i){
+void *InitiParticleV(void *arg){
+    //pthread_mutex_lock(&mutex2);
+    int i = *((int *) arg);
     pv[i].xold	  = particles[i].x;
 	pv[i].yold	  = particles[i].y;
 	pv[i].zold	  = particles[i].z;
 	pv[i].fx	  = 0;
 	pv[i].fy	  = 0;
 	pv[i].fz	  = 0;
+    //pthread_mutex_unlock(&mutex2);
+    pthread_exit(NULL);
 }
 
 int main(int argc, char **argv)
 {
-    Particle  * particles;   /* Particles */
-    ParticleV * pv;          /* Particle velocity */
     int         npart, i, j;
     int         cnt;         /* number of times in loop */
     double      sim_t;       /* Simulation time */
@@ -113,10 +124,26 @@ int main(int argc, char **argv)
 void InitParticles( Particle particles[], ParticleV pv[], int npart )
 {
     int i;
+    pthread_t threadsP[npart];
+    pthread_t threadsPV[npart];
+    int attrib[npart];
+    //pthread_mutex_init(&mutex1, NULL);
+    //pthread_mutex_init(&mutex2, NULL);
     for (i=0; i<npart; i++) {
-    	InitiParticle(particles, i);
-        InitiParticleV(pv, i);
+        attrib[i] = i;
+        pthread_create(&threadsP[i], NULL, InitiParticle, (void *)&attrib[i]);
+        pthread_create(&threadsPV[i], NULL, InitiParticleV, (void *)&attrib[i]);
+    	//InitiParticle(particles, i);
+        //InitiParticleV(pv, i);
     }
+
+    for (i=0; i<npart; i++) {
+        pthread_join(threadsP[i], NULL);
+        pthread_join(threadsPV[i], NULL);
+    }
+    //pthread_mutex_destroy(&mutex1);
+    //pthread_mutex_destroy(&mutex2);
+    pthread_exit(NULL);
 }
 
 double ComputeForces( Particle myparticles[], Particle others[], ParticleV pv[], int npart )
