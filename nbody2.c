@@ -7,29 +7,30 @@
 /*
  * pRNG based on http://www.cs.wm.edu/~va/software/park/park.html
  */
-#define MODULO    2147483647
-#define MULTIPLICADOR 48271
+#define MODULUS    2147483647
+#define MULTIPLIER 48271
 #define DEFAULT    123456789
 
 static long seed = DEFAULT;
 double dt, dt_old; /* Alterado de static para global */
+
+double Random(void)
 /* ----------------------------------------------------------------
- * Random returns a pseudo-random real number uniformly distributed
- * between 0.0 and 1.0.
+ * Random returns a pseudo-random real number uniformly distributed 
+ * between 0.0 and 1.0. 
  * ----------------------------------------------------------------
  */
- double Random(void)
 {
-  const long Q = MODULO / MULTIPLICADOR;
-  const long R = MODULO % MULTIPLICADOR;
+  const long Q = MODULUS / MULTIPLIER;
+  const long R = MODULUS % MULTIPLIER;
         long t;
 
-  t = MULTIPLICADOR * (seed % Q) - R * (seed / Q);
-  if (t > 0)
+  t = MULTIPLIER * (seed % Q) - R * (seed / Q);
+  if (t > 0) 
     seed = t;
-  else
-    seed = t + MODULO;
-  return ((double) seed / MODULO);
+  else 
+    seed = t + MODULUS;
+  return ((double) seed / MODULUS);
 }
 
 /*
@@ -46,64 +47,92 @@ typedef struct {
     double fx, fy, fz;
 } ParticleV;
 
-Particle  * particles;   /* Particles */
-ParticleV * pv;          /* Particle velocity */
+typedef struct {
+	Particle ps;
+	ParticleV psv;
+}	PnV;
 
-void *InitiParticle(void *);
-void *InitiParticleV(void *);
 void InitParticles( Particle[], ParticleV [], int );
-
+//void *InitParticles(void *);
 double ComputeForces( Particle [], Particle [], ParticleV [], int );
 double ComputeNewPos( Particle [], ParticleV [], int, double);
 
-void *InitiParticle(void *arg){
-    //pthread_mutex_lock(&mutex1);
-    int i = *((int *) arg);
-    particles[i].x	  = Random();
-	particles[i].y	  = Random();
-	particles[i].z	  = Random();
-	particles[i].mass = 1.0;
-    printf("Cheguei aqui\n");
-    //pthread_mutex_unlock(&mutex2);
-    pthread_exit(NULL);
+Particle  * particles;   /* Particles */
+ParticleV * pv;          /* Particle velocity */
+
+int main(int argc, char **argv)
+{
+    int         npart, i, j;
+    int         cnt;         /* number of times in loop */
+    double      sim_t;       /* Simulation time */
+    int tmp;
+    if(argc != 3){
+			printf("Wrong number of parameters.\nUsage: nbody num_bodies timesteps\n");
+			exit(1);
+		}
+    
+		npart = atoi(argv[1]);
+		cnt = atoi(argv[2]);
+		dt = 0.001; 
+		dt_old = 0.001;
+
+    /* Allocate memory for particles */
+    particles = (Particle *) malloc(sizeof(Particle)*npart);
+    pv = (ParticleV *) malloc(sizeof(ParticleV)*npart);
+    
+    /* Generate the initial values */
+    InitParticles( particles, pv, npart);
+    sim_t = 0.0;
+
+    while (cnt--) {
+      double max_f;
+      /* Compute forces (2D only) */
+      max_f = ComputeForces( particles, particles, pv, npart );
+      /* Once we have the forces, we compute the changes in position */
+      sim_t += ComputeNewPos( particles, pv, npart, max_f);
+    }
+    for (i=0; i<npart; i++)
+      fprintf(stdout,"%.5lf %.5lf\n", particles[i].x, particles[i].y);
+    return 0;
 }
 
-void *InitiParticleV(void *arg){
-    //pthread_mutex_lock(&mutex2);
-  int i = *((int *) arg);
-  pv[i].xold	  = particles[i].x;
-	pv[i].yold	  = particles[i].y;
-	pv[i].zold	  = particles[i].z;
-	pv[i].fx	  = 0;
-	pv[i].fy	  = 0;
-	pv[i].fz	  = 0;
-    //pthread_mutex_unlock(&mutex2);
-    pthread_exit(NULL);
+PnV pnv;
+
+void iniciar_particula(){
+	pnv.ps.x	  = Random();
+	pnv.ps.y	  = Random();
+	pnv.ps.z	  = Random();
+	pnv.ps.mass   = 1.0;
+	pnv.psv.xold  = pnv.ps.x;
+	pnv.psv.yold  = pnv.ps.y;
+	pnv.psv.zold  = pnv.ps.z;
+	pnv.psv.fx	  = 0;
+	pnv.psv.fy	  = 0;
+	pnv.psv.fz	  = 0;
+}
+
+void *thread_inicializadora(void *cont){
+	int i = *((int *) cont);
+	iniciar_particula();
+	particles[i] = pnv.ps;
+	pv[i] = pnv.psv;
+	pthread_exit(NULL);
 }
 
 void InitParticles( Particle particles[], ParticleV pv[], int npart )
 {
+	pthread_t threads[npart];
     int i;
-    pthread_t threadsP[npart];
-    pthread_t threadsPV[npart];
-    int attrib[npart];
-    //pthread_mutex_init(&mutex1, NULL);
-    //pthread_mutex_init(&mutex2, NULL);
+	int atrib[npart];
     for (i=0; i<npart; i++) {
-        attrib[i] = i;
-        pthread_create(&threadsP[i], NULL, InitiParticle, (void *)&attrib[i]);
-        pthread_create(&threadsPV[i], NULL, InitiParticleV, (void *)&attrib[i]);
-    	//InitiParticle(particles, i);
-        //InitiParticleV(pv, i);
+		atrib[i] = i;
+		pnv.ps = particles[i];
+		pnv.psv = pv[i];
+		pthread_create(&threads[i], NULL, thread_inicializadora, (void *)&atrib[i]);
     }
-
-    for (i=0; i<npart; i++) {
-        pthread_join(threadsP[i], NULL);
-        pthread_join(threadsPV[i], NULL);
-    }
-    //pthread_mutex_destroy(&mutex1);
-    //pthread_mutex_destroy(&mutex2);
-    pthread_exit(NULL);
+	for (i=0; i<npart; i++) {
+		pthread_join(threads[i], NULL);
+	}
 }
 
 double ComputeForces( Particle myparticles[], Particle others[], ParticleV pv[], int npart )
@@ -111,8 +140,6 @@ double ComputeForces( Particle myparticles[], Particle others[], ParticleV pv[],
   double max_f;
   int i;
   max_f = 0.0;
-
-
   for (i=0; i<npart; i++) {
     int j;
     double xi, yi, mi, rx, ry, mj, r, fx, fy, rmin;
@@ -137,7 +164,7 @@ double ComputeForces( Particle myparticles[], Particle others[], ParticleV pv[],
     pv[i].fy += fy;
     fx = sqrt(fx*fx + fy*fy)/rmin;
     if (fx > max_f) max_f = fx;
-}
+  }
   return max_f;
 }
 
@@ -149,7 +176,6 @@ double ComputeNewPos( Particle particles[], ParticleV pv[], int npart, double ma
   a0	 = 2.0 / (dt * (dt + dt_old));
   a2	 = 2.0 / (dt_old * (dt + dt_old));
   a1	 = -(a0 + a2);
-
   for (i=0; i<npart; i++) {
     double xi, yi;
     xi	           = particles[i].x;
@@ -161,7 +187,6 @@ double ComputeNewPos( Particle particles[], ParticleV pv[], int npart, double ma
     pv[i].fx       = 0;
     pv[i].fy       = 0;
   }
-
   dt_new = 1.0/sqrt(max_f);
   /* Set a minimum: */
   if (dt_new < 1.0e-6) dt_new = 1.0e-6;
@@ -175,45 +200,4 @@ double ComputeNewPos( Particle particles[], ParticleV pv[], int npart, double ma
     dt    *= 2.0;
   }
   return dt_old;
-}
-
-
-int main(int argc, char **argv)
-{
-    int         npart, i, j;
-    int         cnt;         /* number of times in loop */
-    double      sim_t;       /* Simulation time */
-    int tmp;
-    if(argc != 3){
-    printf("Wrong number of parameters.\nUsage: nbody num_bodies timesteps\n");
-    exit(1);
-  }
-
-  npart = atoi(argv[1]);
-  cnt = atoi(argv[2]);
-  dt = 0.001;
-  dt_old = 0.001;
-
-    /* Allocate memory for particles */
-    particles = (Particle *) malloc(sizeof(Particle)*npart);
-    pv = (ParticleV *) malloc(sizeof(ParticleV)*npart);
-
-    /* Generate the initial values */
-    InitParticles( particles, pv, npart);
-    sim_t = 0.0;
-
-    while (cnt--) {
-    fprintf(stdout, "Contador: %d\n", cnt);
-      double max_f;
-      /* Compute forces (2D only) */
-      max_f = ComputeForces( particles, particles, pv, npart );
-      fprintf(stdout, "max_f: %g\n", max_f);
-      /* Once we have the forces, we compute the changes in position */
-      sim_t += ComputeNewPos( particles, pv, npart, max_f);
-    fprintf(stdout, "sim_t: %g\n", sim_t);
-    fprintf(stdout, "------------------------------------\n");
-    }
-    for (i=0; i<npart; i++)
-      fprintf(stdout,"X: %.5lf Y: %.5lf\n", particles[i].x, particles[i].y);
-    return 0;
 }
