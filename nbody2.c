@@ -160,14 +160,11 @@ void *thread_calculadora(void *cont){
       fx -= mj * rx / r;
       fy -= mj * ry / r;
     }
-    //mutex_lock
-    pthread_mutex_lock(&mutex);
     pv[i].fx += fx;
     pv[i].fy += fy;
-    pthread_mutex_unlock(&mutex);
-    //mutex_unlock
     fx = sqrt(fx*fx + fy*fy)/rmin;
     if (fx > max_f) max_f = fx;
+    pthread_exit(NULL);
 }
 
 double ComputeForces( Particle myparticles[], Particle others[], ParticleV pv[], int npart )
@@ -177,7 +174,6 @@ double ComputeForces( Particle myparticles[], Particle others[], ParticleV pv[],
   pthread_t threads[npart];
   int params[2];
   max_f = 0.0;
-  pthread_mutex_init(&mutex, NULL);
   for (i=0; i<npart; i++) {
       atrib[i] = i;
       pthread_create(&threads[i], NULL, thread_calculadora, (void *)&atrib[i]);
@@ -185,19 +181,15 @@ double ComputeForces( Particle myparticles[], Particle others[], ParticleV pv[],
   for (i=0; i<npart; i++) {
       pthread_join(threads[i], NULL);
   }
-  pthread_mutex_destroy(&mutex);
   return max_f;
 }
 
-double ComputeNewPos( Particle particles[], ParticleV pv[], int npart, double max_f)
-{
-  int i;
-  double a0, a1, a2;
-  double dt_new;
-  a0	 = 2.0 / (dt * (dt + dt_old));
-  a2	 = 2.0 / (dt_old * (dt + dt_old));
-  a1	 = -(a0 + a2);
-  for (i=0; i<npart; i++) {
+void *thread_pos_calculadora(void *cont){
+    int i = *((int *)cont);
+    double a0, a1, a2;
+    a0	 = 2.0 / (dt * (dt + dt_old));
+    a2	 = 2.0 / (dt_old * (dt + dt_old));
+    a1	 = -(a0 + a2);
     double xi, yi;
     xi	           = particles[i].x;
     yi	           = particles[i].y;
@@ -207,6 +199,22 @@ double ComputeNewPos( Particle particles[], ParticleV pv[], int npart, double ma
     pv[i].yold     = yi;
     pv[i].fx       = 0;
     pv[i].fy       = 0;
+    pthread_exit(NULL);
+}
+
+double ComputeNewPos( Particle particles[], ParticleV pv[], int npart, double max_f)
+{
+  int i;
+  int atrib[npart];
+  double dt_new;
+  pthread_t threads[npart];
+  pthread_mutex_init(&mutex, NULL);
+  for (i=0; i<npart; i++) {
+      atrib[i] = i;
+      pthread_create(&threads[i], NULL, thread_pos_calculadora, (void *)&atrib[i]);
+  }
+  for (i=0; i<npart; i++) {
+      pthread_join(threads[i], NULL);
   }
   dt_new = 1.0/sqrt(max_f);
   /* Set a minimum: */
@@ -220,5 +228,6 @@ double ComputeNewPos( Particle particles[], ParticleV pv[], int npart, double ma
     dt_old = dt;
     dt    *= 2.0;
   }
+  pthread_mutex_destroy(&mutex);
   return dt_old;
 }
