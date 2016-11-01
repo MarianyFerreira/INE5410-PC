@@ -96,8 +96,10 @@ int main(int argc, char **argv) {
 
 void InitParticles( Particle particles[], ParticleV pv[], int npart ) {
     int i;
-
-    for (i=0; i<npart; i++) {
+    
+    #pragma opm parallel
+    #pragma opm for
+    for (i=0; i < npart; i++) {
 	particles[i].x	  = Random();
 	particles[i].y	  = Random();
 	particles[i].z	  = Random();
